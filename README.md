@@ -51,6 +51,7 @@ the returned sequence violates nothing.
     app/        the web service: reads data/organism.json at import, nothing else
     data/       organism.json (in git); permalinks.sqlite (not in git)
     tests/      control, round-trip, determinism, API contracts
+    worker/     Cloudflare deployment shim only: proxies to the container
 
 ## What one request does
 
@@ -196,7 +197,65 @@ It prints the Step 1 facts, the four Step 2 gate numbers and the new
 
     docker build -t codon-optimiser . && docker run -p 8000:8000 codon-optimiser
 
-Then open <http://127.0.0.1:8000/>.
+Then open <http://127.0.0.1:8000/>. Both forms must be started from the repository
+root: the default table path is relative (`ORGANISM_JSON` overrides it).
+
+## Deploy (Cloudflare)
+
+**This app cannot be a Worker.** ViennaRNA is a compiled C extension — its PyPI
+wheels are macOS/manylinux/musllinux/Windows only, with no Emscripten build — and
+Python Workers run on Pyodide, which takes pure-Python or PyEmscripten packages.
+`app/liabilities.py` imports `RNA` at module load, and `fold_dg` is load-bearing:
+the 5′ ΔG window, the hairpin flags and every per-codon ΔG in the tooltip come from
+it. There is nothing to port, only something to delete.
+
+So the container runs the app and a Worker fronts it, which is what Cloudflare
+Containers requires:
+
+```mermaid
+flowchart LR
+  C["client"] --> W["Worker<br/>worker/index.js<br/>proxies, decides nothing"]
+  W --> DO["Durable Object<br/>class CodonOptimiser"]
+  DO --> K["container from ./Dockerfile<br/>uvicorn --workers 1 on :8000<br/>standard-2, 1 vCPU / 6 GiB"]
+  K --> A["app/ — FastAPI, Jinja, /api/v1"]
+  W -->|"CF-Connecting-IP"| K
+```
+
+    npm install
+    open -a Docker                 # wrangler builds and pushes the image itself
+    npx wrangler login
+    npx wrangler deploy
+
+Wrangler builds for `linux/amd64` and verifies it, so the Dockerfile needs no
+`--platform`.
+
+**Cloudflare Containers needs the Workers Paid plan.** On a free account the image
+builds and the Worker bundles, then `GET /accounts/{id}/containers/me` answers `401`:
+*"You do not have access to Cloudflare Containers. Deploying containers requires the
+Workers Paid plan."* The token scopes are not the problem — an OAuth login already
+carries `containers:write`. `npx wrangler deploy --containers-rollout=none` ships the
+Worker alone, but that Worker has nothing to proxy to, so it is only useful for
+checking the bundle.
+
+Without that plan the same image runs anywhere and Cloudflare can still front it:
+`docker run -p 8000:8000 codon-optimiser` behind `cloudflared tunnel --url
+http://localhost:8000`, or on any container host with Cloudflare as DNS/proxy. No
+code changes either way — `wrangler.jsonc` just sits dormant until the plan exists.
+
+Two consequences worth knowing before you rely on them:
+
+- **Container disk is ephemeral.** When the instance sleeps (10 min idle by default)
+  `data/permalinks.sqlite` is gone and old `/p/{id}` links 404. Raising `sleepAfter`
+  only postpones that while paying for an idle instance; real persistence means
+  moving those rows off local disk.
+- **`max_instances` is 1 on purpose.** The codon tables, the byte-identical
+  determinism guarantee and the per-IP CPU counters are all per-process. Raising it
+  multiplies the effective rate limit by the instance count.
+
+The Worker sets `CLIENT_IP_HEADER=CF-Connecting-IP` because behind a proxy every
+request shares one socket peer, which would collapse the per-IP CPU budget into a
+single bucket one caller could drain for everybody. The app trusts that header only
+when the deployment names it — unset, a caller could forge it for a free budget.
 
 ## API
 

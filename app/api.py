@@ -9,6 +9,7 @@ coordinates, never sequence content.
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -40,6 +41,9 @@ CPU_WINDOW_SECONDS = 60.0
 # ponytail: in-process dict, one container. Ceiling: it resets on restart and does
 # not span replicas. Upgrade path = the same counters in the permalink SQLite file.
 _cpu_usage: dict[str, list[float]] = {}
+# Set by the deployment (worker/index.js sets CF-Connecting-IP) when this process
+# sits behind a proxy it trusts. Empty means "trust nothing but the socket".
+CLIENT_IP_HEADER = os.environ.get("CLIENT_IP_HEADER", "")
 
 log = logging.getLogger("codon-optimiser")
 
@@ -81,6 +85,18 @@ class OptimiseRequest(BaseModel):
 
 # --- middleware and error handling ----------------------------------------
 def _client_ip(request: Request) -> str:
+    """The caller the CPU budget is charged to.
+
+    Behind a proxy — Cloudflare Containers puts a Worker in front of this process —
+    the socket peer is the proxy, so every caller would share one budget and one of
+    them could exhaust it for everybody. The forwarded header is only trusted when
+    the deployment names it, never by default: it is caller-controlled, so trusting
+    it on a directly exposed process would make the limit a free reset instead.
+    """
+    if CLIENT_IP_HEADER:
+        forwarded = request.headers.get(CLIENT_IP_HEADER)
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 

@@ -1,0 +1,12 @@
+{
+  "name": "codon-optimiser",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare deployment shim: a Worker that fronts the app container. The app itself is Python; see requirements.txt.",
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.124.0"
+  }
+}

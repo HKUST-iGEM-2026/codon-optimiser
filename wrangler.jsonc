@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "codon-optimiser",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-19",
+  "observability": { "enabled": true },
+
+  // The app cannot be a Worker: ViennaRNA is a compiled C extension with no
+  // Emscripten/Pyodide wheel, and app/liabilities.py imports it at module load.
+  // So the real app stays in the container built from the existing Dockerfile and
+  // the Worker only fronts it, which is what Cloudflare Containers requires.
+  "containers": [
+    {
+      "class_name": "CodonOptimiser",
+      "image": "./Dockerfile",
+      // standard-2 = 1 vCPU / 6 GiB. The CPU-second budget in app/api.py is
+      // calibrated against roughly one core: a cap-sized protein costs ~4 CPU-s,
+      // so on `lite` (1/16 vCPU) a single request would take over a minute.
+      "instance_type": "standard-2",
+      // One instance on purpose. The codon tables, the determinism guarantee and
+      // the per-IP CPU counters are all per-process, and uvicorn runs --workers 1.
+      // Raising this multiplies the effective rate limit by the instance count.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "OPTIMISER", "class_name": "CodonOptimiser" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodonOptimiser"] }]
+}

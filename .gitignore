@@ -6,3 +6,5 @@ __pycache__/
 # permalink rows are user input, never committed
 data/permalinks.sqlite
 .DS_Store
+node_modules/
+.wrangler/

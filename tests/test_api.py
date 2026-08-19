@@ -131,6 +131,23 @@ def test_cpu_budget_is_charged_for_the_solve_not_the_event_loop():
     assert billed > 0.5 * burned, f"billed {billed:.4f}s of {burned:.4f}s CPU"
 
 
+def test_forwarded_client_ip_is_only_trusted_when_the_deployment_names_it(monkeypatch):
+    """Behind the Cloudflare Worker every request has the same socket peer, so the
+    budget must key on CF-Connecting-IP there — and must ignore that header when the
+    process is exposed directly, where any caller could set it for a free reset."""
+    headers = {"CF-Connecting-IP": "203.0.113.9"}
+
+    monkeypatch.setattr(api, "CLIENT_IP_HEADER", "")
+    api._cpu_usage.clear()
+    client.post("/api/v1/optimise", json={"sequence": PROTEIN}, headers=headers)
+    assert set(api._cpu_usage) == {"testclient"}, "spoofable header was trusted"
+
+    monkeypatch.setattr(api, "CLIENT_IP_HEADER", "CF-Connecting-IP")
+    api._cpu_usage.clear()
+    client.post("/api/v1/optimise", json={"sequence": PROTEIN}, headers=headers)
+    assert set(api._cpu_usage) == {"203.0.113.9"}, "real client IP was not billed"
+
+
 def test_page_renders_gate_numbers_and_config_for_the_client():
     """The shell is server-rendered: the gate must be readable with JS disabled."""
     html = client.get("/").text
