@@ -1,4 +1,4 @@
-# codon-optimiser
+Codon Optimiser
 
 Codon optimiser for **Clostridium butyricum DSM 10702** (RefSeq `GCF_000409755.1`,
 taxid 1316931, NCBI translation table 11, 28.4992% genomic GC).
