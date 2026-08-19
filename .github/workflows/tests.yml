@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Claude.md requires the E. coli control test in CI: it is the only test that
+      # catches a silent hygiene-filter bug. It skips itself when the Datasets CLI is
+      # missing, so without this step the requirement would be met in name only.
+      # pipeline/fetch.py looks for .tools/datasets by default.
+      - name: NCBI Datasets CLI
+        run: |
+          mkdir -p .tools
+          curl -sSfL -o .tools/datasets \
+            https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/linux-amd64/datasets
+          chmod +x .tools/datasets
+
+      # The assembly and the PaxDb dataset are ~90 MB and never change for a pinned
+      # accession, so they are fetched once and reused. Bump the key to refetch.
+      - uses: actions/cache@v4
+        with:
+          path: .work
+          key: control-data-GCF_000005845.2-v1
+
+      # From the repository root: the default table path is relative.
+      - run: pytest -q

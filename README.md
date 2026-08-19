@@ -222,14 +222,22 @@ flowchart LR
   K --> A["app/ — FastAPI, Jinja, /api/v1"]
 ```
 
-Cloud Run needs no config committed here — the Dockerfile is the whole contract:
+**GitHub cannot serve it.** Pages is static files only; there is no Python process, so
+no solver and no ViennaRNA. What GitHub does do is build and publish the image
+(`.github/workflows/image.yml`), which is the awkward part everywhere else:
 
-    gcloud run deploy codon-optimiser --source . --region europe-west1 \
-      --allow-unauthenticated --cpu 1 --memory 1Gi --max-instances 1 --concurrency 4
+    docker run -p 8000:8000 ghcr.io/hkust-igem-2026/codon-optimiser:latest
 
-Fly (`fly launch --dockerfile Dockerfile`) and Render (Docker service from the repo)
-work the same way. Note Render's free tier is 0.1 vCPU, where a cap-sized solve costs
-about 4 CPU-seconds and would take roughly a minute.
+That one command is the whole deployment on anything that can run a container — a lab
+box, a VPS, a university VM. Pair it with `cloudflared tunnel` for a hostname without
+opening a port. Hosts that take the image with no CLI to install and no card:
+
+| Host | How | Ceiling |
+|---|---|---|
+| Hugging Face Space | `sdk: docker` + `app_port: 8000` in the Space README, then `git push` | free 2 vCPU; disk resets on restart, so permalinks need `/data` |
+| GitHub Codespaces | `docker run` inside, set the forwarded port to Public | genuinely GitHub, but stops after ~30 min idle and bills core-hours |
+| Cloud Run | `gcloud run deploy --source . --allow-unauthenticated --cpu 1 --max-instances 1` | needs the gcloud SDK; free tier fits, scales to zero, full vCPU per request |
+| Fly / Render | `fly launch --dockerfile Dockerfile`, or a Render Docker service | Render's free tier is 0.1 vCPU, where a cap-sized 4 CPU-second solve takes about a minute |
 
 Then point Cloudflare at it: add a **CNAME** for the hostname to the host's URL, leave
 the proxy **on** (orange cloud), and set the host's custom domain to match so its TLS
@@ -284,3 +292,7 @@ hygiene-filter bug: current run gives Spearman rho = 0.588 over 3,560 genes.
 The rest: round-trip (re-optimising native ribosomal genes must move few codons and
 never de-adapt them), determinism (ten runs, byte-identical), engine contracts, and
 API contracts including that no error response ever echoes a sequence.
+
+CI runs the same command on every push (`.github/workflows/tests.yml`). It installs the
+Datasets CLI first and caches `.work/`, because the control test skips itself without
+that binary — and a control test that always skips satisfies `Claude.md` in name only.

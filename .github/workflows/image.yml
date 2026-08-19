@@ -1,0 +1,42 @@
+name: image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+# GitHub cannot serve this app — Pages is static only and there is no Python process
+# — but it can build and host the image, which is the part that is awkward elsewhere.
+# Any box then runs it with one `docker run`.
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # ghcr.io rejects uppercase names and this repository is HKUST-iGEM-2026/…,
+      # so github.repository cannot be used verbatim.
+      - id: image
+        run: |
+          echo "ref=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" \
+            >> "$GITHUB_OUTPUT"
+
+      # No secret to configure: GITHUB_TOKEN is issued to the workflow run itself.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.image.outputs.ref }}:latest
+            ${{ steps.image.outputs.ref }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
