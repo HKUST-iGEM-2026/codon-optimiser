@@ -49,6 +49,52 @@
   </section>
 
   <section>
+    <details class="card guide">
+      <summary>How to use this</summary>
+      <ol>
+        <li>Paste a <strong>protein</strong> (<span class="mono">MSKIYA…</span>) or a <strong>coding
+          sequence</strong> (<span class="mono">ATGAGC…</span>). Pure ACGT/U whose length divides by 3 is
+          read as a CDS and its own CAI is reported next to the new one; anything else is read as protein.
+          The cap is {{ limits.input_cap_nt }} nt of output.</li>
+        <li>Pick a <strong>mode</strong>. <em>Maximise</em> gives every amino acid the reference set's
+          favourite codon (CAI → 1.0). <em>Harmonise</em> reproduces the genome's own codon distribution,
+          rare codons included. The default is
+          {{ 'maximise' if org.default_mode == 'maximise' else 'harmonise' }} because the gate above
+          {{ 'passes' if org.default_mode == 'maximise' else 'fails' }}.</li>
+        <li>List the <strong>motifs</strong> your cloning strategy forbids — restriction or Type IIS sites
+          such as <span class="mono">GAATTC, GGATCC, GGTCTC</span>. IUPAC codes are accepted and both
+          strands are checked. These are hard: a returned sequence never contains one. Maximising CAI
+          <em>creates</em> such sites (best codons spell <span class="mono">GAA·TTC</span> for every EF
+          in your protein), so this field earns its keep.</li>
+        <li>Leave the <strong>seed</strong> at {{ default_seed }}. Same input and seed always give
+          byte-identical output; change it only to redraw a harmonisation, or to retry a
+          <em>solver gave up</em> refusal.</li>
+        <li>Tick <strong>Create permalink</strong> if you want a shareable link, then press
+          <strong>Optimise</strong>. Only the request is stored, never the sequence: the link recomputes.</li>
+      </ol>
+
+      <h3 class="label">Reading the result</h3>
+      <dl>
+        <dt>CAI</dt><dd>geometric mean of per-codon relative adaptiveness; 1.0 is the reference set's
+          favourite codon everywhere. Met, Trp and stops have no synonym and are not scored.</dd>
+        <dt>GC</dt><dd>global band is a hard constraint. The 50nt window has a hard ceiling and a
+          flagged-only floor: a floor would forbid sequence this organism's own genes contain.</dd>
+        <dt>Changed codons</dt><dd>against your CDS, or against the mode's own baseline for protein
+          input. Counted again after codon 12, because the weights were built on genes trimmed there.</dd>
+        <dt>5′ ΔG</dt><dd>folding energy of the first 40 nt. Near zero means open, which is what
+          translation initiation wants. Do not read a large negative number as "stable, therefore good".</dd>
+        <dt>Codon track</dt><dd>colour by adaptiveness or by what moved each codon; hover one for its
+          weight, the exact rule that moved it, and the local ΔG that choice cost.</dd>
+        <dt>Flags vs warnings</dt><dd>flags are liabilities deliberately left in the sequence (soft
+          rules); warnings are things about the run. A hard rule is never left violated — the request is
+          refused with coordinates instead, and no sequence comes back.</dd>
+        <dt>Manifest</dt><dd>every constant the run used, carried into Copy and Export FASTA. It is what
+          makes a result reproducible somewhere else.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <section>
     <h2 class="label">Input</h2>
     <div class="card">
       <textarea id="sequence" rows="8" spellcheck="false"

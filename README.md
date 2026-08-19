@@ -203,6 +203,93 @@ moved, because `table_version` is a hash of them and every manifest carries it.
 Then open <http://127.0.0.1:8000/>. Both forms must be started from the repository
 root: the default table path is relative (`ORGANISM_JSON` overrides it).
 
+## Tutorial: one sequence, start to finish
+
+### In the page
+
+**1. Paste a sequence.** Either a protein (`MSKIYA…`) or a coding sequence (`ATGAGC…`).
+`parse_input` decides: pure ACGT/U with a length divisible by 3 is a CDS, anything else
+is protein. A CDS costs nothing extra and buys two things — its own CAI for comparison,
+and its native initiator is kept instead of a forced `ATG`. The cap is 3,000 nt of
+*output*, checked against the protein length, not the paste. **Load example ribosomal
+protein** fills in rpsJ (`K670_RS00880`) if you just want to see it move.
+
+**2. Pick a mode.** Maximise gives every amino acid the reference set's favourite codon;
+harmonise reproduces the genome-wide distribution, rare codons at their natural rate.
+The default is what the gate decided — maximise for this organism. Rule of thumb:
+maximise when you want the highest adaptation the liability rules allow, harmonise when
+you want native-like behaviour and distrust CAI as a proxy.
+
+**3. Name the motifs you cannot ship.** Restriction and Type IIS sites, comma separated:
+`GAATTC, GGATCC, GGTCTC`. IUPAC codes work (`N R Y W S K M B D H V`), both strands are
+checked, and the rule is hard — a returned sequence never contains one.
+
+This field is not optional decoration. Maximising CAI *manufactures* these sites,
+because the best codons here are `E → GAA` and `F → TTC`, so every **EF** in your protein
+spells `GAATTC`, and every **HM** spells `CATATG`:
+
+| run on a test protein with three EF pairs | CAI | EcoRI sites | codons forced by a constraint |
+|---|---|---|---|
+| no `avoid` | 0.8847 | 2 | 1 |
+| `avoid = GAATTC` | 0.7840 | 0 | 3 |
+
+That 0.10 of CAI is the honest price of a construct that survives its own cloning
+reaction. The per-codon record names it: `E: GAA → GAG, avoided_motif, "GAA here would
+create GAATTC"`.
+
+**4. Leave the seed alone.** `20240517`. Same input plus same seed is byte-identical
+output, which is what makes permalinks recomputable. Change it for exactly two reasons:
+to redraw a harmonisation (the codon *counts* are arithmetic, only which position gets
+which synonym is drawn), or to retry a `503 solver_gave_up`, which means the random
+search ran out of attempts and is explicitly not a proof of infeasibility.
+
+**5. Optimise.** Tick **Create permalink** first if you want a link — it stores the
+request only, and `/p/{id}` recomputes the result on read.
+
+### Reading the result
+
+| What | How to read it |
+|---|---|
+| **CAI** | geometric mean of per-codon relative adaptiveness $w_c = f_c / \max f_{c'}$ over the family. 1.0 = the favourite codon everywhere. Met, Trp and stops have no synonym and are excluded. A pasted CDS also shows its own CAI |
+| **GC** | the global band is hard. The 50nt window has a hard ceiling and a *flagged-only* floor — a 25% floor inside a 28.5%-GC organism forbids sequence its own ribosomal genes contain, and drove `rplB` infeasible |
+| **Changed codons** | against your CDS, or against the mode's baseline for protein input. Recounted after codon 12, because the weights were built on genes trimmed there |
+| **5′ ΔG** | MFE of the first 40 nt. Near zero means open, which is what initiation wants. Do not read a large negative number as "stable, therefore good" |
+| **Codon track** | colour by adaptiveness, or by what moved each codon. Hover a codon for its weight, the rule that moved it and the local ΔG that choice cost |
+| **Flags** | soft liabilities deliberately left in: AT-rich windows, hairpins, terminator-like stems. Nothing here is a hard-rule violation — those are never returned |
+| **Warnings** | facts about the run, not the sequence: a non-M start, a permalink that could not be written |
+| **Manifest** | every constant the run used. Travels into Copy and Export FASTA, so a result can be reproduced elsewhere |
+
+A refusal is not a result. `422 infeasible` and `503 solver_gave_up` return coordinates
+and the conflicting pair of rules, and **no sequence** — see the failure-mode diagram
+above. `422` is also the request-validation status; the `error` field tells them apart
+(`infeasible` vs `invalid_request`), and a bad sequence is `400 invalid_sequence`.
+
+### The same thing over the API
+
+    # optimise a protein, forbid two restriction sites, ask for a permalink
+    curl -s localhost:8000/api/v1/optimise -H 'content-type: application/json' -d '{
+      "sequence": "MSKQKIRIRLKAFDHTILDQSAEKIVETAKTSGAKVVGPVPLPTEKDVVTILRAVHKYKDSREQFEIRTHKRLIDIVNPSPKTVDALMRLNLPAGVDIEIKL",
+      "mode": "maximise", "avoid": ["GAATTC", "GGATCC"], "permalink": true
+    }' | jq '{sequence, cai: .metrics.cai, permalink, warnings}'
+
+    # recompute a permalink; nothing but the request was stored
+    curl -s localhost:8000/api/v1/permalink/32e478668be8b1df | jq '.metrics'
+
+    # FASTA, manifest in the header line
+    curl -s localhost:8000/api/v1/export.fasta -H 'content-type: application/json' \
+      -d '{"sequence": "MSKIYAIAKELNVSKQTVSRWLNDESLSKEQ"}'
+
+`locked` is API-only: `[[0, 12]]` holds codons 0–11 of a pasted CDS exactly as given while
+everything downstream is optimised — the way to keep a tag, an RBS-adjacent 5′ end or a
+fusion junction untouched. Spans are codon indices, half-open, and are asserted unchanged
+before the response is built.
+
+Budget note: the rate limit is 20 CPU-seconds per IP per 60 s, billed on the thread that
+solves, so it is the *solve* you pay for and a health check costs nothing. Measured on an
+M4: rpsJ (103 codons) 0.01 CPU-s, a 1,000-codon protein 0.16 in maximise and 1.20 in
+harmonise, a repetitive 500-codon protein 0.56 before giving up. Ordinary use will not
+reach the ceiling; a script in a loop will.
+
 ## Deploy: Vercel
 
 Vercel runs the ASGI app directly as a Python function — no container, no `$PORT`, no

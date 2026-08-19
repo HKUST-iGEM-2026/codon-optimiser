@@ -100,6 +100,13 @@ textarea:focus, input:focus, .btn:focus-visible, .seg:focus-visible, .codon:focu
 .field.grow { flex: 1 1 220px; }
 .check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 details summary { cursor: pointer; font-size: 13px; color: var(--teal); }
+.guide { font-size: 13px; }
+.guide ol { margin: calc(2 * var(--s)) 0 0; padding-left: 18px; }
+.guide li { margin-bottom: var(--s); }
+.guide h3 { margin: calc(3 * var(--s)) 0 0; }
+.guide dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px calc(2 * var(--s)); margin: var(--s) 0 0; }
+.guide dt { font-weight: 500; }
+.guide dd { margin: 0; color: var(--muted); }
 
 .btn {
   border: 1px solid var(--hairline); background: var(--card); color: var(--ink);
@@ -169,5 +176,7 @@ footer { color: var(--muted); font-size: 12px; border-top: 1px solid var(--hairl
 
 @media (max-width: 900px) {
   .metrics, .metrics.six, .two { grid-template-columns: repeat(2, 1fr); }
+  .guide dl { grid-template-columns: 1fr; gap: 2px; }
+  .guide dd { margin-bottom: var(--s); }
   main { padding: calc(2 * var(--s)); }
 }
