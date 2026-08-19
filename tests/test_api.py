@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -197,3 +201,21 @@ def test_missing_codon_tables_name_the_file_and_the_fix():
     assert "cannot load the codon tables" in proc.stderr
     assert "/nonexistent/organism.json" in proc.stderr
     assert "ORGANISM_JSON" in proc.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the permission bits this relies on")
+def test_permalink_db_moves_to_tmp_when_the_project_tree_is_read_only(tmp_path, monkeypatch):
+    """Serverless runtimes (Vercel functions, Lambda) mount the project read-only and
+    offer a writable temp dir instead, so the default has to notice rather than be
+    configured per platform — there is no vercel.json to hold the override."""
+    read_only = tmp_path / "deployment"
+    (read_only / "data").mkdir(parents=True)
+    monkeypatch.chdir(read_only)
+
+    assert store._default_db() == store.DEFAULT_DB, "writable tree must stay beside the tables"
+
+    (read_only / "data").chmod(0o500)
+    try:
+        assert store._default_db() == Path(tempfile.gettempdir()) / "permalinks.sqlite"
+    finally:
+        (read_only / "data").chmod(0o700)  # let tmp_path clean itself up

@@ -1,3 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# Vercel's Python runtime looks for app.py/index.py/main.py/... by filename. The ASGI
+# app already lives at app/api.py, so point at it rather than adding a shim that would
+# be a second place for the app to be constructed.
+[tool.vercel]
+entrypoint = "app.api:app"

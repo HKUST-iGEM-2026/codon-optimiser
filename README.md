@@ -7,8 +7,11 @@ Paste a protein or a coding sequence, get a DNA coding sequence plus a per-codon
 explanation of why each codon was chosen. The explanation is the product; the
 sequence is commodity.
 
-Conventions, recorded gate numbers and hard rules live in `Claude.md`. Read that
-first; this file says how the pieces fit and how to run them.
+Every fixed convention is a module constant, not prose: the hygiene filter and the
+table parameters in `pipeline/tables.py`, the liability rules in `app/liabilities.py`,
+the bands and windows in `app/engine.py`. Each result echoes the whole set back in its
+`manifest`, so the values a run actually used can never drift from the ones documented
+here. This file says how the pieces fit and how to run them.
 
 ## How it fits together
 
@@ -132,9 +135,10 @@ background interpolated on the adaptiveness ramp, a 2px amber bottom bar for
 `changed-by-constraint`, indigo for `changed-by-objective`, no bar for `unchanged`,
 plus a "colour by change" view. Visual system comes from the Stitch design system
 asset `assets/17898767070783141685` ("Instrument"); its `design.md` is the contract
-`app/static/app.css` implements. Stitch screen generation is unusable through MCP
-(30 s transport timeout against a multi-minute job) — see the UI section of
-`Claude.md`.
+`app/static/app.css` implements. Stitch screen generation is unusable through MCP: every
+call dies on a 30 s transport timeout while the tool's own docs say generation takes
+minutes, and the job does not survive the abort, so there are no screen mockups to
+implement against and the layout follows the design system's documented rules.
 
 ## The tables, and the gate that decides the default mode
 
@@ -180,14 +184,15 @@ iterating from genome-wide weights climbs the AT-mutational gradient, not the
 translational one. The E. coli control run gives 33/45 = 73%, which is what shows
 the procedure itself is sound.
 
-## Rebuild the tables (only when a convention in `Claude.md` changes)
+## Rebuild the tables (only when a fixed convention changes)
 
     curl -sL -o .tools/datasets https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/mac/datasets
     chmod +x .tools/datasets
     python -m pipeline.build GCF_000409755.1        # downloads via the Datasets CLI, then builds
 
-It prints the Step 1 facts, the four Step 2 gate numbers and the new
-`table_version`, all of which must be copied into `Claude.md`.
+It prints the Step 1 facts, the four Step 2 gate numbers and the new `table_version`.
+Those are the recorded numbers: update the gate table above and the constants that
+moved, because `table_version` is a hash of them and every manifest carries it.
 
 ## Run
 
@@ -199,7 +204,64 @@ It prints the Step 1 facts, the four Step 2 gate numbers and the new
 Then open <http://127.0.0.1:8000/>. Both forms must be started from the repository
 root: the default table path is relative (`ORGANISM_JSON` overrides it).
 
-## Deploy
+## Deploy: Vercel
+
+Vercel runs the ASGI app directly as a Python function — no container, no `$PORT`, no
+process manager, and no `vercel.json`. Three things in the repo make it work:
+
+| File | Why |
+|---|---|
+| `pyproject.toml` → `[tool.vercel] entrypoint = "app.api:app"` | Vercel scans for `app.py`/`index.py`/`main.py`…; the ASGI app lives at `app/api.py`, so it is named explicitly rather than duplicated into a shim |
+| `requirements.txt` | runtime only. Vercel installs it into the bundle, so `pytest`/`httpx` moved to `requirements-dev.txt` |
+| `.vercelignore` | Python functions bundle every reachable file with no tree-shaking, so `tests/`, `pipeline/`, `.work/` and `.venv/` are kept out |
+
+    npx vercel        # or connect the repo in the dashboard
+
+```mermaid
+flowchart LR
+  C["client"] --> V["Vercel edge<br/>routes every path to the function"]
+  V --> F["Python function, iad1<br/>2 GB / 1 vCPU, 300 s ceiling"]
+  F --> A["app.api:app<br/>FastAPI + Jinja + /static"]
+  A --> E["engine.py — DnaChisel<br/>liabilities.py — ViennaRNA"]
+  A --> T["/tmp/permalinks.sqlite<br/>per-instance, ephemeral"]
+  V -->|"x-vercel-forwarded-for"| F
+```
+
+Measured against the platform limits rather than assumed:
+
+| Limit | Ours |
+|---|---|
+| 500 MB bundle (Python) | **163 MB** of runtime deps on `linux/amd64` — `RNA` 52, `numpy` 71, `Bio` 21 |
+| 300 s max duration (Hobby) | **5.4 s** for the worst input the cap allows (999 aa → 3,000 nt), so `maxDuration` is left at the default |
+| 2 GB / 1 vCPU (Hobby) | a full core, which is what the 20 CPU-second budget assumes |
+| 4.5 MB request body | the sequence field caps at 12,000 characters |
+
+Nothing needs configuring for it to run. The one thing worth setting is a single
+**Project Settings → Environment Variables** entry:
+
+    CLIENT_IP_HEADER = x-vercel-forwarded-for
+
+Inside the function the socket peer is Vercel's proxy, so without it every caller shares
+one CPU budget per instance and one of them can spend it for everybody. That header is
+safe to trust *here* and only here: Vercel overwrites `X-Forwarded-For` and does not
+forward external IPs, specifically to prevent spoofing, and `x-vercel-forwarded-for`
+survives another proxy in front. It is deliberately not a default — on an origin that is
+reachable directly, trusting a request header turns the rate limit into a free reset.
+
+The permalink database needs no configuration: the default notices that the project tree
+is read-only and moves to the system temp dir, which is the same rule that makes the
+image work on Lambda or a read-only container root.
+
+Two ceilings to know:
+
+- **Permalinks are per-instance.** `/tmp` belongs to one function instance, so a link
+  created on one can 404 on another, and vanishes when the instance recycles. Real
+  permalinks need storage off the function — the row is tiny and the schema is in
+  `app/store.py`.
+- **The rate limit is per-instance too.** `_cpu_usage` is an in-process dict, and Vercel
+  scales instances out, so the effective budget multiplies by the instance count.
+
+## Deploy: a container anywhere
 
 **Not as a Cloudflare Worker, and not as a Cloudflare Container.** ViennaRNA is a
 compiled C extension — its PyPI wheels are macOS/manylinux/musllinux/Windows only,
@@ -295,4 +357,4 @@ API contracts including that no error response ever echoes a sequence.
 
 CI runs the same command on every push (`.github/workflows/tests.yml`). It installs the
 Datasets CLI first and caches `.work/`, because the control test skips itself without
-that binary — and a control test that always skips satisfies `Claude.md` in name only.
+that binary — and a control test that always skips is the requirement in name only.

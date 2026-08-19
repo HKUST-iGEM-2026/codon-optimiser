@@ -15,7 +15,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -r requirements.txt
+      # requirements.txt is runtime-only so Vercel does not ship pytest to production.
+      - run: pip install -r requirements-dev.txt
 
       # Claude.md requires the E. coli control test in CI: it is the only test that
       # catches a silent hygiene-filter bug. It skips itself when the Datasets CLI is

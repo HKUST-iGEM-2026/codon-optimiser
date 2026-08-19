@@ -12,9 +12,27 @@ import hashlib
 import json
 import os
 import sqlite3
+import tempfile
 from pathlib import Path
 
-DB_PATH = Path(os.environ.get("PERMALINK_DB", "data/permalinks.sqlite"))
+DEFAULT_DB = Path("data/permalinks.sqlite")
+
+
+def _default_db() -> Path:
+    """`data/` beside the tables, or the system temp dir when the tree is read-only.
+
+    Serverless runtimes mount the project read-only and give you a writable temp dir
+    instead — Vercel functions, Lambda, Cloud Run with a read-only root. Detecting that
+    rather than naming a platform keeps one rule for all of them, and the alternative
+    (a hardcoded /tmp) would scatter permalink databases on a normal machine.
+    """
+    probe = DEFAULT_DB.parent if DEFAULT_DB.parent.is_dir() else Path(".")
+    if os.access(probe, os.W_OK):
+        return DEFAULT_DB
+    return Path(tempfile.gettempdir()) / "permalinks.sqlite"
+
+
+DB_PATH = Path(os.environ["PERMALINK_DB"]) if os.environ.get("PERMALINK_DB") else _default_db()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS permalink (

@@ -1,0 +1,20 @@
+# Python functions bundle every project file that is reachable at build time — there
+# is no tree-shaking — so anything the request path does not need is dead weight in
+# the bundle and in the cold start.
+.venv/
+.work/
+.tools/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Offline table builder: run by hand, never imported by app/.
+pipeline/
+tests/
+
+# Other deployment targets and CI.
+Dockerfile
+.github/
+
+# Never upload a permalink database.
+data/permalinks.sqlite
