@@ -15,8 +15,6 @@
   <h1>Codon optimiser</h1>
   <div class="pills">
     <span class="pill mono">{{ org.organism.organism }}</span>
-    <span class="pill mono">{{ org.assembly_accession }} · table {{ org.organism.translation_table }} · {{ org.organism.genomic_gc_percent }}% GC</span>
-    <span class="pill mono">tables {{ org.table_version }}</span>
   </div>
 </header>
 
@@ -73,18 +71,6 @@
         </label>
         <label class="check"><input id="permalink" type="checkbox"> Create permalink</label>
       </div>
-
-      <details class="context">
-        <summary>Assembled construct context</summary>
-        <div class="controls">
-          <label class="field grow">5′ upstream (for the {{ five_prime_window[0] }}…+{{ five_prime_window[1] }} structure window)
-            <input id="upstream" class="mono" type="text" placeholder="AGGAGGTGATCACAAT">
-          </label>
-          <label class="field grow">3′ downstream
-            <input id="downstream" class="mono" type="text" placeholder="">
-          </label>
-        </div>
-      </details>
 
       <div class="row actions">
         <button id="optimise" type="button" class="btn primary">Optimise</button>

@@ -86,7 +86,7 @@ def test_nothing_is_stored_without_an_explicit_permalink_request():
     """Permalinks are the one route that persists input, and only on demand."""
     sequence = PROTEIN + "AAK"
     payload = {"sequence": sequence, "mode": None, "seed": engine.DEFAULT_SEED,
-               "avoid": [], "upstream": "", "downstream": "", "locked": []}
+               "avoid": [], "locked": []}
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     would_be = hashlib.sha256(
         f"{engine.ENGINE_VERSION}\0{org.TABLE_VERSION}\0{blob}".encode()

@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import engine, liabilities, store
+from . import engine, store
 from . import organism as org
 
 HERE = Path(__file__).parent
@@ -63,8 +63,6 @@ class OptimiseRequest(BaseModel):
     mode: Literal["maximise", "harmonise"] | None = None
     seed: int = engine.DEFAULT_SEED
     avoid: list[str] = Field(default_factory=list, max_length=32)
-    upstream: str = Field(default="", max_length=500)
-    downstream: str = Field(default="", max_length=500)
     locked: list[tuple[int, int]] = Field(default_factory=list, max_length=64)
     permalink: bool = False
 
@@ -73,8 +71,6 @@ class OptimiseRequest(BaseModel):
             mode=self.mode or org.DEFAULT_MODE,
             seed=self.seed,
             avoid=tuple(self.avoid),
-            upstream=self.upstream.upper(),
-            downstream=self.downstream.upper(),
             locked=tuple((a, b) for a, b in self.locked),
         )
 
@@ -193,7 +189,6 @@ def page(request: Request, permalink: str | None = None):
             "gate": org.ORGANISM["gate"],
             "limits": {"input_cap_nt": engine.INPUT_CAP_NT},
             "default_seed": engine.DEFAULT_SEED,
-            "five_prime_window": liabilities.FIVE_PRIME_WINDOW,
             "claim": CLAIM,
             "permalink": permalink,
         },

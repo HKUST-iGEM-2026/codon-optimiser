@@ -74,8 +74,6 @@ class Params:
     mode: str = org.DEFAULT_MODE
     seed: int = DEFAULT_SEED
     avoid: tuple[str, ...] = ()
-    upstream: str = ""
-    downstream: str = ""
     locked: tuple[tuple[int, int], ...] = ()  # codon index ranges, half-open
 
     def __post_init__(self):
@@ -90,9 +88,6 @@ class Params:
                 lb.iupac_regex(motif)
             except ValueError as exc:
                 raise InvalidInput(f"avoid: {exc}") from exc
-        for name, ctx in (("upstream", self.upstream), ("downstream", self.downstream)):
-            if set(ctx) - set("ACGT"):
-                raise InvalidInput(f"{name} context must be plain ACGT")
         for a, b in self.locked:
             if not 0 <= a < b:
                 raise InvalidInput(f"locked span {(a, b)} is not a codon range")
@@ -102,8 +97,6 @@ class Params:
             "mode": self.mode,
             "seed": self.seed,
             "avoid": list(self.avoid),
-            "upstream_nt": len(self.upstream),
-            "downstream_nt": len(self.downstream),
             "locked_codon_spans": [list(s) for s in self.locked],
             "gc_global_band_percent": list(GC_GLOBAL_BAND),
             "gc_window_band_percent": list(GC_WINDOW_BAND),
@@ -113,7 +106,7 @@ class Params:
             "direct_repeat_nt": lb.DIRECT_REPEAT_NT,
             "tandem_unit_nt": lb.TANDEM_UNIT_NT,
             "input_cap_nt": INPUT_CAP_NT,
-            "five_prime_window": list(lb.FIVE_PRIME_WINDOW),
+            "five_prime_window_nt": lb.FIVE_PRIME_WINDOW,
             "trim_codons_for_change_metric": TRIM_CODONS,
         }
 
@@ -442,25 +435,9 @@ def optimise(text: str, params: Params | None = None) -> dict:
     reference = input_codons if input_codons is not None else start
     codon_records = _explain(out_codons, reference, seq, params)
     changed = [r for r in codon_records if r["status"] != "unchanged"]
-    construct = params.upstream + seq + params.downstream
     windows = [
         lb.gc_percent(seq[i : i + lb.GC_WINDOW_NT]) for i in range(0, max(1, len(seq) - lb.GC_WINDOW_NT + 1))
     ]
-
-    junction = [
-        v
-        for v in lb.homopolymers(construct)
-        + lb.direct_repeats(construct)
-        + lb.tandem_repeats(construct)
-        + lb.motifs(construct, params.avoid)
-        if v["start"] < len(params.upstream) < v["end"]
-        or v["start"] < len(params.upstream) + len(seq) < v["end"]
-    ]
-    warnings += [f"junction {v['rule']} at {v['start']}-{v['end']}: {v['detail']}" for v in junction]
-    if not params.upstream:
-        warnings.append(
-            "no upstream context given: the 5' structure window is +1..+40 only, not -30..+40"
-        )
 
     return {
         "sequence": seq,
@@ -478,7 +455,7 @@ def optimise(text: str, params: Params | None = None) -> dict:
             "changed_codons_fraction": round(len(changed) / len(out_codons), 4),
             "changed_codons_after_trim": sum(1 for r in changed if r["index"] >= TRIM_CODONS),
             "changed_by_constraint": sum(1 for r in changed if r["status"] == "changed-by-constraint"),
-            "five_prime": lb.five_prime_dg(construct, len(params.upstream)),
+            "five_prime": lb.five_prime_dg(seq),
         },
         "flags": (
             lb.hairpin_flags(seq)

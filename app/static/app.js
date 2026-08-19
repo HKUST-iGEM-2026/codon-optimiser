@@ -39,8 +39,6 @@ function payload(extra) {
       mode: state.mode,
       seed: Number($("seed").value),
       avoid,
-      upstream: $("upstream").value.trim().toUpperCase(),
-      downstream: $("downstream").value.trim().toUpperCase(),
     },
     extra || {}
   );
@@ -132,7 +130,7 @@ function render(data) {
     ["GC 50nt window", `${m.gc_window_min}–${m.gc_window_max}%`, `ceiling ${data.manifest.parameters.gc_window_band_percent[1]}%`],
     ["Changed codons", `${m.changed_codons} / ${data.codons.length}`, `${m.changed_by_constraint} forced by a constraint`],
     ["Changed after codon 12", `${m.changed_codons_after_trim}`, "5′ convention of the tables"],
-    ["5′ ΔG", Number(m.five_prime.dg).toFixed(2), `kcal/mol, ${m.five_prime.upstream_nt_available}nt upstream`],
+    ["5′ ΔG", Number(m.five_prime.dg).toFixed(2), `kcal/mol, first ${m.five_prime.window_nt}nt`],
   ];
   const strip = $("result-metrics");
   strip.replaceChildren();
@@ -368,13 +366,4 @@ async function loadPermalink(pid) {
   $("avoid").value = data.manifest.parameters.avoid.join(", ");
   updateCounter();
   render(data);
-  // The manifest carries context lengths, never the context itself (sequences are
-  // ephemeral), so the two fields cannot be repopulated. Say so, because pressing
-  // Optimise again without them silently produces a different result.
-  const p = data.manifest.parameters;
-  if (p.upstream_nt || p.downstream_nt) {
-    $("result-note").textContent +=
-      ` · assembled with ${p.upstream_nt}nt 5′ and ${p.downstream_nt}nt 3′ context, not shown: ` +
-      "re-optimising from this page without re-entering it gives a different result";
-  }
 }

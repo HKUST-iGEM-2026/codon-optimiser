@@ -98,10 +98,9 @@ infeasibility, so it never claims to be. Every refusal returns coordinates and n
 sequence. Rate limiting is on CPU-seconds per IP (20 s per 60 s window), billed on
 the worker thread that runs the solve, not on request count.
 
-Two things deliberately degrade to a `warnings` entry instead of an error, because
+One thing deliberately degrades to a `warnings` entry instead of an error, because
 the solve itself is fine and is the expensive part: a permalink row that cannot be
-written (read-only or full disk — the result comes back without a shareable link),
-and a junction liability created where the CDS meets the 5′/3′ context you supplied.
+written (read-only or full disk — the result comes back without a shareable link).
 In the browser, a failed Copy or FASTA export reports on the button that was pressed
 and never clears the result underneath it.
 
@@ -333,12 +332,12 @@ volume, or move those rows off local disk.
 |---|---|
 | `GET /healthz` | engine and table version |
 | `GET /api/v1/organism` | organism facts, the four gate numbers, codon tables, limits |
-| `POST /api/v1/optimise` | `{sequence, mode?, seed?, avoid?, upstream?, downstream?, locked?, permalink?}` |
+| `POST /api/v1/optimise` | `{sequence, mode?, seed?, avoid?, locked?, permalink?}` |
 | `GET /api/v1/permalink/{id}` | recomputes a stored request (deterministic, so nothing but the request is stored) |
 | `POST /api/v1/export.fasta` | FASTA with the manifest in the header line |
 
 `locked` (codon-index spans held to the input) is API-only; the page exposes mode,
-seed, avoided motifs, 5'/3' context and permalink.
+seed, avoided motifs and permalink.
 
 Sequences live in memory for the request only. The single carve-out is
 `permalink: true`, which stores the *request* — never the output — keyed by a hash

@@ -22,7 +22,7 @@ GC_WINDOW_NT = 50
 HAIRPIN_DG = -15.0  # kcal/mol
 HAIRPIN_WINDOW_NT = 60
 HAIRPIN_WINDOW_STEP = 20
-FIVE_PRIME_WINDOW = (-30, 40)  # from the A of the start codon, assembled construct
+FIVE_PRIME_WINDOW = 40  # nt from the A of the start codon
 TERMINATOR_STEM = (5, 8)
 TERMINATOR_LOOP = (3, 8)
 TERMINATOR_T_RUN = 4
@@ -217,17 +217,14 @@ def fold_dg(seq: str) -> float:
     return RNA.fold(seq.replace("T", "U"))[1]
 
 
-def five_prime_dg(construct: str, cds_start: int) -> dict:
-    """-30..+40 from the A of the start codon, on the assembled construct.
+def five_prime_dg(seq: str) -> dict:
+    """+1..+40 from the A of the start codon.
 
     Near zero (weak, open) is what good expression wants. Do not invert the sign.
     """
-    start = max(0, cds_start + FIVE_PRIME_WINDOW[0])
-    end = min(len(construct), cds_start + FIVE_PRIME_WINDOW[1])
-    window = construct[start:end]
+    window = seq[:FIVE_PRIME_WINDOW]
     return {
-        "window": [start - cds_start, end - cds_start],
-        "upstream_nt_available": cds_start - start,
+        "window_nt": len(window),
         "dg": round(fold_dg(window), 2),
         "structure": RNA.fold(window.replace("T", "U"))[0],
     }

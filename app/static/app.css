@@ -99,8 +99,7 @@ textarea:focus, input:focus, .btn:focus-visible, .seg:focus-visible, .codon:focu
 .field.short { width: 140px; }
 .field.grow { flex: 1 1 220px; }
 .check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.context { margin-top: calc(2 * var(--s)); }
-.context summary, details summary { cursor: pointer; font-size: 13px; color: var(--teal); }
+details summary { cursor: pointer; font-size: 13px; color: var(--teal); }
 
 .btn {
   border: 1px solid var(--hairline); background: var(--card); color: var(--ink);
