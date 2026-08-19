@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codon optimiser — {{ org.organism.organism }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-permalink="{{ permalink or '' }}" data-default-mode="{{ org.default_mode }}" data-cap="{{ limits.input_cap_nt }}">
+
+<header class="topbar">
+  <h1>Codon optimiser</h1>
+  <div class="pills">
+    <span class="pill mono">{{ org.organism.organism }}</span>
+    <span class="pill mono">{{ org.assembly_accession }} · table {{ org.organism.translation_table }} · {{ org.organism.genomic_gc_percent }}% GC</span>
+    <span class="pill mono">tables {{ org.table_version }}</span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="section-head">
+      <h2 class="label">Translational selection gate</h2>
+      <span class="pill pill-state">Default mode: {{ 'maximise codon adaptation' if org.default_mode == 'maximise' else 'harmonisation' }}</span>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <span class="label">Ribosomal CAI rank</span>
+        <span class="value">{{ gate.ribosomal_cai_rank.median_percentile }}<span class="unit">th pct</span></span>
+        <span class="sub">median {{ gate.ribosomal_cai_rank.median_rank }} of {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes</span>
+      </div>
+      <div class="metric">
+        <span class="label">S index (sscu)</span>
+        <span class="value">{{ gate.s_index.value }}</span>
+        <span class="sub">GC3 {{ gate.s_index.genomic_gc3 }} · selection above 0.3</span>
+      </div>
+      <div class="metric">
+        <span class="label">eCAI 95th pct</span>
+        <span class="value">{{ gate.ecai.value }}</span>
+        <span class="sub">observed {{ gate.ecai.observed_reference_cai }} · {{ 'passes' if gate.ecai.passes else 'fails' }}</span>
+      </div>
+      <div class="metric">
+        <span class="label">Ribosomal in self-consistent set</span>
+        <span class="value">{{ gate.overlap.shared }} / {{ gate.overlap.ribosomal_set_size }}</span>
+        <span class="sub">{{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}% overlap · {{ gate.overlap.iterations }} iterations</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="label">Input</h2>
+    <div class="card">
+      <textarea id="sequence" rows="8" spellcheck="false"
+        placeholder="Paste a protein sequence (MSKIYA…) or a coding sequence (ATGAGC…)"></textarea>
+      <div class="row between">
+        <span id="input-error" class="error-text" role="alert"></span>
+        <span id="counter" class="sub mono">0 aa · 0 / {{ limits.input_cap_nt }} nt output cap</span>
+      </div>
+
+      <div class="controls">
+        <div class="segmented" role="radiogroup" aria-label="Optimisation mode">
+          <button type="button" class="seg" data-mode="maximise" role="radio">Maximise</button>
+          <button type="button" class="seg" data-mode="harmonise" role="radio">Harmonise</button>
+        </div>
+        <label class="field short">Seed
+          <input id="seed" class="mono" type="number" value="{{ default_seed }}" step="1">
+        </label>
+        <label class="field grow">Avoid motifs
+          <input id="avoid" class="mono" type="text" placeholder="GAATTC, GGATCC">
+        </label>
+        <label class="check"><input id="permalink" type="checkbox"> Create permalink</label>
+      </div>
+
+      <details class="context">
+        <summary>Assembled construct context</summary>
+        <div class="controls">
+          <label class="field grow">5′ upstream (for the {{ five_prime_window[0] }}…+{{ five_prime_window[1] }} structure window)
+            <input id="upstream" class="mono" type="text" placeholder="AGGAGGTGATCACAAT">
+          </label>
+          <label class="field grow">3′ downstream
+            <input id="downstream" class="mono" type="text" placeholder="">
+          </label>
+        </div>
+      </details>
+
+      <div class="row actions">
+        <button id="optimise" type="button" class="btn primary">Optimise</button>
+        <button id="example" type="button" class="btn">Load example ribosomal protein</button>
+        <a class="link" href="/api/v1/organism" target="_blank" rel="noopener">View organism tables</a>
+        <span id="busy" class="sub" hidden>solving…</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="failure" hidden>
+    <div class="card failure">
+      <h2 id="failure-title">No sequence returned — hard constraints conflict</h2>
+      <p id="failure-detail" class="sub"></p>
+      <ul id="conflict" class="rules"></ul>
+    </div>
+  </section>
+
+  <section id="result" hidden>
+    <h2 class="label">Result</h2>
+    <div class="metrics six" id="result-metrics"></div>
+    <p class="sub" id="result-note"></p>
+
+    <div class="card">
+      <div class="section-head">
+        <h2 class="label">Codon track</h2>
+        <div class="segmented small" role="radiogroup" aria-label="Codon track colouring">
+          <button type="button" class="seg" data-colour="adaptiveness" role="radio">Colour by adaptiveness</button>
+          <button type="button" class="seg" data-colour="change" role="radio">Colour by change</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="scale" aria-hidden="true"></span>
+        <span class="sub">low adaptiveness → high</span>
+        <span class="key constraint">changed by constraint</span>
+        <span class="key objective">changed by objective</span>
+        <span class="key unchanged">unchanged</span>
+      </div>
+      <div id="track" class="track" tabindex="-1"></div>
+      <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-head">
+        <h2 class="label">Sequence</h2>
+        <div class="row">
+          <button id="copy" type="button" class="btn">Copy</button>
+          <button id="fasta" type="button" class="btn">Export FASTA</button>
+          <span id="permalink-out" class="sub mono"></span>
+        </div>
+      </div>
+      <pre id="sequence-out" class="seq mono"></pre>
+    </div>
+
+    <div class="two">
+      <div class="card">
+        <h2 class="label">Flags</h2>
+        <ul id="flags" class="rules"></ul>
+      </div>
+      <div class="card">
+        <h2 class="label">Warnings and manifest</h2>
+        <ul id="warnings" class="rules"></ul>
+        <details>
+          <summary>Manifest</summary>
+          <dl id="manifest" class="kv mono"></dl>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    {{ claim }}
+  </footer>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

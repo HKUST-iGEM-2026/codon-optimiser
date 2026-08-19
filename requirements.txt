@@ -1,0 +1,12 @@
+# Runtime. Pinned: the manifest promises reproducible numbers, and dnachisel's
+# version travels in it.
+biopython==1.88
+dnachisel==3.2.16
+ViennaRNA==2.7.2
+fastapi==0.141.1
+uvicorn==0.52.3
+jinja2==3.1.6
+
+# Test-only
+pytest==9.1.1
+httpx==0.28.1

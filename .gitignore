@@ -1,0 +1,8 @@
+.venv/
+.work/
+.tools/
+__pycache__/
+*.pyc
+# permalink rows are user input, never committed
+data/permalinks.sqlite
+.DS_Store
