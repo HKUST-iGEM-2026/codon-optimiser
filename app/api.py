@@ -41,8 +41,9 @@ CPU_WINDOW_SECONDS = 60.0
 # ponytail: in-process dict, one container. Ceiling: it resets on restart and does
 # not span replicas. Upgrade path = the same counters in the permalink SQLite file.
 _cpu_usage: dict[str, list[float]] = {}
-# Set by the deployment (worker/index.js sets CF-Connecting-IP) when this process
-# sits behind a proxy it trusts. Empty means "trust nothing but the socket".
+# Set to the proxy's client-IP header (Cloudflare sends CF-Connecting-IP) only when
+# the origin cannot be reached except through that proxy. Empty, the default, means
+# "trust nothing but the socket". See the deploy section of README.md.
 CLIENT_IP_HEADER = os.environ.get("CLIENT_IP_HEADER", "")
 
 log = logging.getLogger("codon-optimiser")
@@ -87,11 +88,12 @@ class OptimiseRequest(BaseModel):
 def _client_ip(request: Request) -> str:
     """The caller the CPU budget is charged to.
 
-    Behind a proxy — Cloudflare Containers puts a Worker in front of this process —
-    the socket peer is the proxy, so every caller would share one budget and one of
-    them could exhaust it for everybody. The forwarded header is only trusted when
-    the deployment names it, never by default: it is caller-controlled, so trusting
-    it on a directly exposed process would make the limit a free reset instead.
+    Behind a proxy the socket peer is the proxy, so every caller would share one
+    budget and any one of them could exhaust it for everybody. The forwarded header
+    fixes that, but it is caller-controlled, so it is trusted only when the
+    deployment names it — and it should only be named when the origin refuses
+    traffic that did not come through the proxy. On an origin that is reachable
+    directly, trusting the header turns the rate limit into a free reset.
     """
     if CLIENT_IP_HEADER:
         forwarded = request.headers.get(CLIENT_IP_HEADER)

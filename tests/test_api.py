@@ -132,9 +132,10 @@ def test_cpu_budget_is_charged_for_the_solve_not_the_event_loop():
 
 
 def test_forwarded_client_ip_is_only_trusted_when_the_deployment_names_it(monkeypatch):
-    """Behind the Cloudflare Worker every request has the same socket peer, so the
-    budget must key on CF-Connecting-IP there — and must ignore that header when the
-    process is exposed directly, where any caller could set it for a free reset."""
+    """Behind a proxy every request has the same socket peer, so the budget must key
+    on the forwarded header when the deployment names it — and must ignore it
+    otherwise, since a directly reachable origin would hand every caller a free
+    reset for the price of one request header."""
     headers = {"CF-Connecting-IP": "203.0.113.9"}
 
     monkeypatch.setattr(api, "CLIENT_IP_HEADER", "")
