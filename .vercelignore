@@ -16,5 +16,11 @@ tests/
 Dockerfile
 .github/
 
+# Local test configuration only, and its presence changes how the platform resolves
+# dependencies: Vercel prefers pyproject.toml over requirements.txt and then runs
+# `uv lock`, which fails on a file with no [project] table. Dependencies live in
+# requirements.txt, in one place, so keep this out of the deployment.
+pyproject.toml
+
 # Never upload a permalink database.
 data/permalinks.sqlite

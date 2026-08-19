@@ -211,9 +211,9 @@ process manager, and no `vercel.json`. Three things in the repo make it work:
 
 | File | Why |
 |---|---|
-| `pyproject.toml` → `[tool.vercel] entrypoint = "app.api:app"` | Vercel scans for `app.py`/`index.py`/`main.py`…; the ASGI app lives at `app/api.py`, so it is named explicitly rather than duplicated into a shim |
-| `requirements.txt` | runtime only. Vercel installs it into the bundle, so `pytest`/`httpx` moved to `requirements-dev.txt` |
-| `.vercelignore` | Python functions bundle every reachable file with no tree-shaking, so `tests/`, `pipeline/`, `.work/` and `.venv/` are kept out |
+| `asgi.py` | the entrypoint filename Vercel scans for. It only re-exports `app.api:app`; nothing is constructed twice |
+| `requirements.txt` | the single dependency source. Vercel installs it into the bundle, so `pytest`/`httpx` moved to `requirements-dev.txt` |
+| `.vercelignore` | Python functions bundle every reachable file with no tree-shaking, so `tests/`, `pipeline/`, `.work/` and `.venv/` are kept out — and `pyproject.toml` with them, because Vercel prefers it over `requirements.txt` and then runs `uv lock`, which fails on a file that carries only `[tool.*]` sections |
 
     npx vercel        # or connect the repo in the dashboard
 
@@ -288,11 +288,13 @@ flowchart LR
 no solver and no ViennaRNA. What GitHub does do is build and publish the image
 (`.github/workflows/image.yml`), which is the awkward part everywhere else:
 
-    docker run -p 8000:8000 ghcr.io/hkust-igem-2026/codon-optimiser:latest
+    docker run -p 8000:8000 ghcr.io/OWNER/codon-optimiser:latest
 
-That one command is the whole deployment on anything that can run a container — a lab
-box, a VPS, a university VM. Pair it with `cloudflared tunnel` for a hostname without
-opening a port. Hosts that take the image with no CLI to install and no card:
+`OWNER` is whichever account or org holds the repository, lowercased — `image.yml`
+lowercases `github.repository` itself because ghcr.io rejects uppercase names. That one
+command is the whole deployment on anything that can run a container — a lab box, a VPS,
+a university VM. Pair it with `cloudflared tunnel` for a hostname without opening a
+port. Hosts that take the image with no CLI to install and no card:
 
 | Host | How | Ceiling |
 |---|---|---|
