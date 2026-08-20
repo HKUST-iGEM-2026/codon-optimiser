@@ -46,6 +46,68 @@
         <span class="sub">{{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}% overlap · {{ gate.overlap.iterations }} iterations</span>
       </div>
     </div>
+    <details class="card guide">
+      <summary>What these four numbers mean</summary>
+      <p class="sub">Codon bias has two possible causes and they look identical in the raw counts.
+        <strong>Mutation:</strong> this genome is {{ org.organism.genomic_gc_percent | round(1) }}% GC and
+        its third codon positions are only {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}% GC, so
+        A/T-ending codons pile up on their own. <strong>Selection:</strong> codons matched by abundant
+        tRNAs are translated faster, so heavily expressed genes evolve toward them. Only the second makes
+        "use the best codon everywhere" mean anything — otherwise maximising adaptation just means making
+        your gene A/T-rich. These four checks decide which one is at work here, and therefore which mode
+        this page defaults to.</p>
+      <dl>
+        <dt>Ribosomal CAI rank</dt>
+        <dd><em>Do the genes we already know are heavily expressed score well?</em> A cell runs tens of
+          thousands of ribosomes, so its {{ gate.ribosomal_cai_rank.n_ribosomal }} ribosomal protein genes
+          must be among the busiest — that label comes from biology, not from sequence. Ranking all
+          {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes by CAI puts them at a median of
+          {{ gate.ribosomal_cai_rank.median_rank }}, the top
+          {{ gate.ribosomal_cai_rank.median_percentile }}%. Partly circular, since the weights come from
+          those same genes — and the ruler matters enormously: scored against genome-wide frequencies
+          instead, the identical genes fall to rank
+          {{ gate.ribosomal_cai_rank.under_genome_weights.median_rank }}
+          ({{ gate.ribosomal_cai_rank.under_genome_weights.median_percentile }}th pct), because those
+          weights largely measure A/T-richness.</dd>
+
+        <dt>S index (sscu)</dt>
+        <dd><em>Do the busy genes use codons mutation cannot explain?</em> Sharp's index, over the four
+          two-codon families where the third position is C or T (Tyr, Asn, Ile, Phe) — the families where
+          selection pushes toward C while A/T drift pushes the other way. Mutation alone predicts a
+          C-ending share of about {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}% (that is GC3); the
+          reference genes use 40–51%, three to four times more, uphill. The value is that excess in log
+          odds, averaged over the four families: {{ gate.s_index.value }}. Zero means "exactly what
+          mutation predicts"; sscu's own threshold for selection is 0.3. Drift cannot fake a positive
+          value, because drift is the baseline the formula divides out.</dd>
+
+        <dt>eCAI 95th pct</dt>
+        <dd><em>Is a CAI of {{ gate.ecai.observed_reference_cai }} actually high, or does everything score
+          that well here?</em> {{ gate.ecai.replicates }} fake gene sets are generated that keep the real
+          amino acid sequences but pick codons using base composition alone — no synonym preference.
+          They average {{ gate.ecai.null_mean }}, and 95% of them land below {{ gate.ecai.value }}. The
+          real reference set scores {{ gate.ecai.observed_reference_cai }}, so it
+          {{ 'clears' if gate.ecai.passes else 'does not clear' }} the bar: the bias is not explainable
+          by composition at the 5% level. Without this baseline the raw CAI number means nothing, because
+          composition-matched noise already earns {{ gate.ecai.null_mean }} in a genome this A/T-rich.</dd>
+
+        <dt>Ribosomal in self-consistent set</dt>
+        <dd><em>Hide the answer key — does the data find the busy genes by itself?</em> Starting from
+          genome-wide weights, take the top-scoring {{ gate.overlap.self_consistent_set_size }} genes,
+          rebuild the weights from only those, re-rank, repeat until the membership stops changing
+          ({{ gate.overlap.iterations }} rounds). Of the
+          {{ gate.overlap.ribosomal_set_size }} ribosomal genes it rediscovered
+          {{ gate.overlap.shared }} —
+          {{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}%. <strong>This check
+          fails</strong>, for a diagnosable reason: it starts from weights that reward A/T-richness, so it
+          climbs to the most A/T-extreme genes rather than the most translated ones. The same code on an
+          E. coli control recovers 33 of 45, so the method is sound and the starting point is not. It
+          stays on display because deleting a failed check would be dishonest.</dd>
+      </dl>
+      <p class="sub">The rule, fixed before any of this was computed: <strong>S index clearly above 0.3
+        and eCAI passing → default to maximise; otherwise → default to harmonise.</strong> Only the two
+        composition-proof checks get a vote. Here both pass, so this page defaults to
+        {{ org.default_mode }} — and the other mode stays one click away.</p>
+    </details>
   </section>
 
   <section>

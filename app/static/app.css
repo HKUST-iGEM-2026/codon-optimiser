@@ -104,6 +104,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--teal); }
 .guide ol { margin: calc(2 * var(--s)) 0 0; padding-left: 18px; }
 .guide li { margin-bottom: var(--s); }
 .guide h3 { margin: calc(3 * var(--s)) 0 0; }
+.guide > p { margin: calc(2 * var(--s)) 0 0; line-height: 1.6; }
 .guide dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px calc(2 * var(--s)); margin: var(--s) 0 0; }
 .guide dt { font-weight: 500; }
 .guide dd { margin: 0; color: var(--muted); }
