@@ -48,54 +48,63 @@
     </div>
     <details class="card guide">
       <summary>What these four numbers mean</summary>
-      <p class="sub">Codon bias has two causes that look identical in the counts.
-        <strong>Mutation:</strong> this genome is {{ org.organism.genomic_gc_percent | round(1) }}% GC and
-        its third codon positions only {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}%, so A/T-ending
-        codons accumulate on their own. <strong>Selection:</strong> codons read by abundant tRNAs translate
-        faster, so heavily expressed genes shift toward them. Only selection makes codon adaptation worth
-        maximising, so these four checks test for it.</p>
+      <p class="sub">Some codons get used far more than their synonyms. Two different things cause that.
+        <strong>Mutation:</strong> this genome is {{ org.organism.genomic_gc_percent | round(1) }}% GC, and
+        at the third letter of a codon, where a change usually leaves the protein alone, it falls to
+        {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}%. A and T build up there on their own.
+        <strong>Selection:</strong> the cell stocks some tRNAs more heavily than others, and codons matched
+        to a plentiful tRNA are read faster, so genes needed in bulk shift toward them. Only the second is
+        worth copying. Under mutation alone, "use the most common codon" would just mean "add more A and
+        T". These four checks test which one is at work.</p>
       <dl>
         <dt>Ribosomal CAI rank</dt>
-        <dd><em>Do genes known to be heavily expressed score well?</em> A cell runs tens of thousands of
-          ribosomes, so its {{ gate.ribosomal_cai_rank.n_ribosomal }} ribosomal protein genes are among the
-          busiest. Ranked against all {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes, their median
-          position is {{ gate.ribosomal_cai_rank.median_rank }}, the top
-          {{ gate.ribosomal_cai_rank.median_percentile }}%. Partly circular, since the weights come from
-          those genes. Scored against genome-wide frequencies instead they fall to rank
-          {{ gate.ribosomal_cai_rank.under_genome_weights.median_rank }}
-          ({{ gate.ribosomal_cai_rank.under_genome_weights.median_percentile }}th pct), which shows how
-          much the choice of weights decides.</dd>
+        <dd>CAI scores a gene on how often it picks the codons this organism's hardest-working genes
+          prefer. 1.0 is the maximum. Ribosomal proteins are built in huge numbers, so if CAI tracks
+          workload they should score near the top. Across all
+          {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes, the
+          {{ gate.ribosomal_cai_rank.n_ribosomal }} ribosomal ones sit at a median of
+          {{ gate.ribosomal_cai_rank.median_rank }}, the top
+          {{ gate.ribosomal_cai_rank.median_percentile }}%. Two caveats: the scoring table came from those
+          same genes, so the check cannot fail badly, and everything depends on the table. Score the same
+          genes using codon counts from the whole genome and they drop to
+          {{ gate.ribosomal_cai_rank.under_genome_weights.median_rank }}.</dd>
 
         <dt>S index (sscu)</dt>
-        <dd><em>Do the busy genes use codons mutation cannot explain?</em> Measured on the four two-codon
-          families ending in C or T (Tyr, Asn, Ile, Phe), where selection favours C and drift favours T.
-          Mutation predicts a C-ending share near GC3,
-          {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}%. The reference genes use 40 to 51%. The index
-          is that excess in log odds: {{ gate.s_index.value }}, against sscu's threshold of 0.3. Drift
-          cannot produce a positive value.</dd>
+        <dd>Four amino acids (Tyr, Asn, Ile, Phe) use two codons that differ only in a third letter of C or
+          T. Mutation pushes that letter toward T. The tRNA supply favours C. The two forces pull opposite
+          ways, so they can be told apart. Mutation alone predicts C about
+          {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}% of the time, which is what the genome does.
+          The hardest-working genes use C 40 to 51% of the time. The index measures that gap on a log
+          scale: {{ gate.s_index.value }}. Above 0.3 counts as selection, and mutation cannot lift it above
+          zero, because zero is what mutation predicts.</dd>
 
         <dt>eCAI 95th pct</dt>
-        <dd><em>Is a CAI of {{ gate.ecai.observed_reference_cai }} high, or does everything score that well
-          here?</em> {{ gate.ecai.replicates }} fake gene sets keep the real amino acid sequences but pick
-          codons from base composition alone. They average {{ gate.ecai.null_mean }} and 95% fall below
-          {{ gate.ecai.value }}. The reference set scores {{ gate.ecai.observed_reference_cai }},
-          {{ 'clearing' if gate.ecai.passes else 'missing' }} the bar at the 5% level. Composition-matched
-          noise already earns {{ gate.ecai.null_mean }} here, so the raw CAI means little without this
-          baseline.</dd>
+        <dd>A CAI of {{ gate.ecai.observed_reference_cai }} sounds high, but high next to what? Where the
+          favoured codons end in A or T, a random A/T-rich stretch scores well by accident. So a baseline
+          is built: {{ gate.ecai.replicates }} imitation gene sets, using the real proteins but choosing
+          codons from base composition alone, with no preference between synonyms. They average
+          {{ gate.ecai.null_mean }}, and 95% stay under {{ gate.ecai.value }}. The real genes score
+          {{ gate.ecai.observed_reference_cai }}, above that line, so the pattern is too strong to be a
+          side effect of composition.</dd>
 
         <dt>Ribosomal in self-consistent set</dt>
-        <dd><em>Can the busy genes be found without the answer key?</em> From genome-wide weights, take the
-          top {{ gate.overlap.self_consistent_set_size }} genes, rebuild the weights from those, re-rank,
-          and repeat until the set stops changing ({{ gate.overlap.iterations }} rounds). It recovered
-          {{ gate.overlap.shared }} of the {{ gate.overlap.ribosomal_set_size }} ribosomal genes,
-          {{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}%. <strong>This check
-          fails.</strong> Genome-wide weights reward A/T-richness, so the first pass picks A/T-extreme
-          genes and each round reinforces that. The same code recovers 33 of 45 on E. coli, so the
-          reference set here has to come from annotation, not iteration.</dd>
+        <dd>The first check was told which genes work hardest. This one is told nothing and has to find
+          them. It scores every gene using codon counts from the whole genome, keeps the top
+          {{ gate.overlap.self_consistent_set_size }}, rebuilds the counts from those, and scores again,
+          until the group settles after {{ gate.overlap.iterations }} rounds. If translation drove codon
+          choice, that group would fill with ribosomal genes. It holds {{ gate.overlap.shared }} of the
+          {{ gate.overlap.ribosomal_set_size }}. <strong>This check fails.</strong> The starting counts are
+          the problem: taken from the whole genome, they reward A/T-richness, so round one picks the most
+          A/T-heavy genes and later rounds commit harder to them. The same procedure run on
+          <em>E. coli</em> finds 33 of that organism's 45 ribosomal genes, 73% against
+          {{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}% here. <em>E. coli</em> is near
+          50% GC, so mutation there does not fight the tRNA signal. The method works; this genome is the
+          wrong place to start it, which is why the reference genes here are taken from the genome's
+          annotation instead.</dd>
       </dl>
-      <p class="sub">The rule was fixed before the numbers: <strong>S index above 0.3 and eCAI passing
-        gives a maximise default, otherwise harmonise.</strong> Only those two ignore composition, so only
-        they vote. Both pass, so the default is {{ org.default_mode }}.</p>
+      <p class="sub">The rule was set before the numbers were known: <strong>S index above 0.3 and eCAI
+        passing means maximise by default, otherwise harmonise.</strong> Only those two ignore base
+        composition, so only those two vote. Both pass, so the default is {{ org.default_mode }}.</p>
     </details>
   </section>
 
