@@ -48,65 +48,54 @@
     </div>
     <details class="card guide">
       <summary>What these four numbers mean</summary>
-      <p class="sub">Codon bias has two possible causes and they look identical in the raw counts.
+      <p class="sub">Codon bias has two causes that look identical in the counts.
         <strong>Mutation:</strong> this genome is {{ org.organism.genomic_gc_percent | round(1) }}% GC and
-        its third codon positions are only {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}% GC, so
-        A/T-ending codons pile up on their own. <strong>Selection:</strong> codons matched by abundant
-        tRNAs are translated faster, so heavily expressed genes evolve toward them. Only the second makes
-        "use the best codon everywhere" mean anything — otherwise maximising adaptation just means making
-        your gene A/T-rich. These four checks decide which one is at work here, and therefore which mode
-        this page defaults to.</p>
+        its third codon positions only {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}%, so A/T-ending
+        codons accumulate on their own. <strong>Selection:</strong> codons read by abundant tRNAs translate
+        faster, so heavily expressed genes shift toward them. Only selection makes codon adaptation worth
+        maximising, so these four checks test for it.</p>
       <dl>
         <dt>Ribosomal CAI rank</dt>
-        <dd><em>Do the genes we already know are heavily expressed score well?</em> A cell runs tens of
-          thousands of ribosomes, so its {{ gate.ribosomal_cai_rank.n_ribosomal }} ribosomal protein genes
-          must be among the busiest — that label comes from biology, not from sequence. Ranking all
-          {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes by CAI puts them at a median of
-          {{ gate.ribosomal_cai_rank.median_rank }}, the top
+        <dd><em>Do genes known to be heavily expressed score well?</em> A cell runs tens of thousands of
+          ribosomes, so its {{ gate.ribosomal_cai_rank.n_ribosomal }} ribosomal protein genes are among the
+          busiest. Ranked against all {{ gate.ribosomal_cai_rank.n_ranked_genes }} genes, their median
+          position is {{ gate.ribosomal_cai_rank.median_rank }}, the top
           {{ gate.ribosomal_cai_rank.median_percentile }}%. Partly circular, since the weights come from
-          those same genes — and the ruler matters enormously: scored against genome-wide frequencies
-          instead, the identical genes fall to rank
+          those genes. Scored against genome-wide frequencies instead they fall to rank
           {{ gate.ribosomal_cai_rank.under_genome_weights.median_rank }}
-          ({{ gate.ribosomal_cai_rank.under_genome_weights.median_percentile }}th pct), because those
-          weights largely measure A/T-richness.</dd>
+          ({{ gate.ribosomal_cai_rank.under_genome_weights.median_percentile }}th pct), which shows how
+          much the choice of weights decides.</dd>
 
         <dt>S index (sscu)</dt>
-        <dd><em>Do the busy genes use codons mutation cannot explain?</em> Sharp's index, over the four
-          two-codon families where the third position is C or T (Tyr, Asn, Ile, Phe) — the families where
-          selection pushes toward C while A/T drift pushes the other way. Mutation alone predicts a
-          C-ending share of about {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}% (that is GC3); the
-          reference genes use 40–51%, three to four times more, uphill. The value is that excess in log
-          odds, averaged over the four families: {{ gate.s_index.value }}. Zero means "exactly what
-          mutation predicts"; sscu's own threshold for selection is 0.3. Drift cannot fake a positive
-          value, because drift is the baseline the formula divides out.</dd>
+        <dd><em>Do the busy genes use codons mutation cannot explain?</em> Measured on the four two-codon
+          families ending in C or T (Tyr, Asn, Ile, Phe), where selection favours C and drift favours T.
+          Mutation predicts a C-ending share near GC3,
+          {{ (gate.s_index.genomic_gc3 * 100) | round(1) }}%. The reference genes use 40 to 51%. The index
+          is that excess in log odds: {{ gate.s_index.value }}, against sscu's threshold of 0.3. Drift
+          cannot produce a positive value.</dd>
 
         <dt>eCAI 95th pct</dt>
-        <dd><em>Is a CAI of {{ gate.ecai.observed_reference_cai }} actually high, or does everything score
-          that well here?</em> {{ gate.ecai.replicates }} fake gene sets are generated that keep the real
-          amino acid sequences but pick codons using base composition alone — no synonym preference.
-          They average {{ gate.ecai.null_mean }}, and 95% of them land below {{ gate.ecai.value }}. The
-          real reference set scores {{ gate.ecai.observed_reference_cai }}, so it
-          {{ 'clears' if gate.ecai.passes else 'does not clear' }} the bar: the bias is not explainable
-          by composition at the 5% level. Without this baseline the raw CAI number means nothing, because
-          composition-matched noise already earns {{ gate.ecai.null_mean }} in a genome this A/T-rich.</dd>
+        <dd><em>Is a CAI of {{ gate.ecai.observed_reference_cai }} high, or does everything score that well
+          here?</em> {{ gate.ecai.replicates }} fake gene sets keep the real amino acid sequences but pick
+          codons from base composition alone. They average {{ gate.ecai.null_mean }} and 95% fall below
+          {{ gate.ecai.value }}. The reference set scores {{ gate.ecai.observed_reference_cai }},
+          {{ 'clearing' if gate.ecai.passes else 'missing' }} the bar at the 5% level. Composition-matched
+          noise already earns {{ gate.ecai.null_mean }} here, so the raw CAI means little without this
+          baseline.</dd>
 
         <dt>Ribosomal in self-consistent set</dt>
-        <dd><em>Hide the answer key — does the data find the busy genes by itself?</em> Starting from
-          genome-wide weights, take the top-scoring {{ gate.overlap.self_consistent_set_size }} genes,
-          rebuild the weights from only those, re-rank, repeat until the membership stops changing
-          ({{ gate.overlap.iterations }} rounds). Of the
-          {{ gate.overlap.ribosomal_set_size }} ribosomal genes it rediscovered
-          {{ gate.overlap.shared }} —
+        <dd><em>Can the busy genes be found without the answer key?</em> From genome-wide weights, take the
+          top {{ gate.overlap.self_consistent_set_size }} genes, rebuild the weights from those, re-rank,
+          and repeat until the set stops changing ({{ gate.overlap.iterations }} rounds). It recovered
+          {{ gate.overlap.shared }} of the {{ gate.overlap.ribosomal_set_size }} ribosomal genes,
           {{ (gate.overlap.fraction_of_ribosomal_set * 100) | round(1) }}%. <strong>This check
-          fails</strong>, for a diagnosable reason: it starts from weights that reward A/T-richness, so it
-          climbs to the most A/T-extreme genes rather than the most translated ones. The same code on an
-          E. coli control recovers 33 of 45, so the method is sound and the starting point is not. It
-          stays on display because deleting a failed check would be dishonest.</dd>
+          fails.</strong> Genome-wide weights reward A/T-richness, so the first pass picks A/T-extreme
+          genes and each round reinforces that. The same code recovers 33 of 45 on E. coli, so the
+          reference set here has to come from annotation, not iteration.</dd>
       </dl>
-      <p class="sub">The rule, fixed before any of this was computed: <strong>S index clearly above 0.3
-        and eCAI passing → default to maximise; otherwise → default to harmonise.</strong> Only the two
-        composition-proof checks get a vote. Here both pass, so this page defaults to
-        {{ org.default_mode }} — and the other mode stays one click away.</p>
+      <p class="sub">The rule was fixed before the numbers: <strong>S index above 0.3 and eCAI passing
+        gives a maximise default, otherwise harmonise.</strong> Only those two ignore composition, so only
+        they vote. Both pass, so the default is {{ org.default_mode }}.</p>
     </details>
   </section>
 
@@ -115,43 +104,39 @@
       <summary>How to use this</summary>
       <ol>
         <li>Paste a <strong>protein</strong> (<span class="mono">MSKIYA…</span>) or a <strong>coding
-          sequence</strong> (<span class="mono">ATGAGC…</span>). Pure ACGT/U whose length divides by 3 is
-          read as a CDS and its own CAI is reported next to the new one; anything else is read as protein.
-          The cap is {{ limits.input_cap_nt }} nt of output.</li>
+          sequence</strong> (<span class="mono">ATGAGC…</span>). Pure ACGT/U with a length divisible by 3
+          is read as a CDS, and its own CAI is reported beside the new one. The cap is
+          {{ limits.input_cap_nt }} nt of output.</li>
         <li>Pick a <strong>mode</strong>. <em>Maximise</em> gives every amino acid the reference set's
-          favourite codon (CAI → 1.0). <em>Harmonise</em> reproduces the genome's own codon distribution,
-          rare codons included. The default is
-          {{ 'maximise' if org.default_mode == 'maximise' else 'harmonise' }} because the gate above
-          {{ 'passes' if org.default_mode == 'maximise' else 'fails' }}.</li>
-        <li>List the <strong>motifs</strong> your cloning strategy forbids — restriction or Type IIS sites
-          such as <span class="mono">GAATTC, GGATCC, GGTCTC</span>. IUPAC codes are accepted and both
-          strands are checked. These are hard: a returned sequence never contains one. Maximising CAI
-          <em>creates</em> such sites (best codons spell <span class="mono">GAA·TTC</span> for every EF
-          in your protein), so this field earns its keep.</li>
-        <li>Leave the <strong>seed</strong> at {{ default_seed }}. Same input and seed always give
-          byte-identical output; change it only to redraw a harmonisation, or to retry a
-          <em>solver gave up</em> refusal.</li>
-        <li>Tick <strong>Create permalink</strong> if you want a shareable link, then press
-          <strong>Optimise</strong>. Only the request is stored, never the sequence: the link recomputes.</li>
+          favourite codon. <em>Harmonise</em> reproduces the genome's own codon distribution, rare codons
+          included. The default is {{ org.default_mode }}, decided by the gate above.</li>
+        <li>List the <strong>motifs</strong> your cloning strategy forbids, such as
+          <span class="mono">GAATTC, GGATCC, GGTCTC</span>. IUPAC codes work and both strands are checked.
+          A returned sequence never contains one. Maximising CAI <em>creates</em> these sites, since the
+          best codons spell <span class="mono">GAA·TTC</span> for every EF in your protein.</li>
+        <li>Leave the <strong>seed</strong> at {{ default_seed }}. The same input and seed give the same
+          output. Change it to redraw a harmonisation, or to retry a <em>solver gave up</em> refusal.</li>
+        <li>Tick <strong>Create permalink</strong> for a shareable link, then press
+          <strong>Optimise</strong>. Only the request is stored, never the sequence.</li>
       </ol>
 
       <h3 class="label">Reading the result</h3>
       <dl>
-        <dt>CAI</dt><dd>geometric mean of per-codon relative adaptiveness; 1.0 is the reference set's
+        <dt>CAI</dt><dd>Geometric mean of per-codon relative adaptiveness. 1.0 is the reference set's
           favourite codon everywhere. Met, Trp and stops have no synonym and are not scored.</dd>
-        <dt>GC</dt><dd>global band is a hard constraint. The 50nt window has a hard ceiling and a
-          flagged-only floor: a floor would forbid sequence this organism's own genes contain.</dd>
-        <dt>Changed codons</dt><dd>against your CDS, or against the mode's own baseline for protein
-          input. Counted again after codon 12, because the weights were built on genes trimmed there.</dd>
-        <dt>5′ ΔG</dt><dd>folding energy of the first 40 nt. Near zero means open, which is what
-          translation initiation wants. Do not read a large negative number as "stable, therefore good".</dd>
-        <dt>Codon track</dt><dd>colour by adaptiveness or by what moved each codon; hover one for its
-          weight, the exact rule that moved it, and the local ΔG that choice cost.</dd>
-        <dt>Flags vs warnings</dt><dd>flags are liabilities deliberately left in the sequence (soft
-          rules); warnings are things about the run. A hard rule is never left violated — the request is
-          refused with coordinates instead, and no sequence comes back.</dd>
-        <dt>Manifest</dt><dd>every constant the run used, carried into Copy and Export FASTA. It is what
-          makes a result reproducible somewhere else.</dd>
+        <dt>GC</dt><dd>The global band is hard. The 50nt window has a hard ceiling and a flagged-only
+          floor, since a floor would forbid sequence this organism's own genes contain.</dd>
+        <dt>Changed codons</dt><dd>Counted against your CDS, or against the mode's baseline for protein
+          input. Counted again after codon 12, where the weights were trimmed.</dd>
+        <dt>5′ ΔG</dt><dd>Folding energy of the first 40 nt. Near zero means open, which is what
+          initiation wants. A large negative number is worse, not better.</dd>
+        <dt>Codon track</dt><dd>Colour by adaptiveness or by what moved each codon. Hover a codon for its
+          weight, the rule that moved it, and the local ΔG that choice cost.</dd>
+        <dt>Flags vs warnings</dt><dd>Flags are soft liabilities left in the sequence. Warnings describe
+          the run. A hard rule is never left violated: the request is refused with coordinates and no
+          sequence.</dd>
+        <dt>Manifest</dt><dd>Every constant the run used, carried into Copy and Export FASTA so a result
+          can be reproduced elsewhere.</dd>
       </dl>
     </details>
   </section>
